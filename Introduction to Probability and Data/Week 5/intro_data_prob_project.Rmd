@@ -1,0 +1,160 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+### Load data
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+The brfss2013 data set is a data set provided by the Behavioral Risk Factor Surveillance System (BRFSS) project. It contains 491775 observational records collected from randomly selected adults (age 18 and older) in the U.S., the District of Columbia, Puerto Rico, Guam, American Samoa, Federated States of Micronesia and Palau. Interviewers selected one random person per household (private residence or college housing) and collected answers to the questionnaire via landline phone or cellular phone. Optional modules in the questionnaire address children of age 17 and younger specifically. 
+
+The selection of participants is done via random sampling. However, due to the fact that only adults are selected and that a phone is required, the generalizability is limited to that particular group of persons which is arguably a large part of the society. Due to response bias (e.g. not answering the phone because of working hours or vacation, or refusing to participate in the survey), there might be a slight bias. Furthermore, due to response errors, some of the records might contain false data.
+
+The generalization for children is far more limited because children are not called directly and because children questionnaires are purely optional. This induces a large selection and response bias.
+
+Due to the nature of the BRFSS, inferring causalality is not easily possible. There is no study involved that uses random assignment to measure the effects of a specific treatment across different groups. Consequently, there is no control for confounding variables and thus, we cannont conclude causality from the data. Note: There are more advanced techniques to gain insight about causal relationships, but they are beyond the scope of both the course and my working knowledge as of today.  
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:**
+It is often said that healthy sleep habits are a necessity for good health. On the other hand, poor health might lead to bad sleep. We will try and look for this relationship in the data and try to answer the question: Is there a correlation between hours slept and general health?
+
+**Research quesion 2:**
+It is often proposed that a good education is fundamental for financial success. Furthermore, there is a controverse discussion about unequal pay for males and females. To look at these claims from a slightly different angle, we will adress the question: Is there a correlation between education and income by gender?
+
+**Research quesion 3:**
+A career in investment banking tends to have higher suicide rates than other professional careers. This profession is demanding and comes with a large time investment. We will focus on finding a correlation between time commitment to work and depression. Since veterans tend to have mental issues due to their demanding life in the army, we will split the surveyed individuals by veteran status. Our question is: Is there a correlation between depression and hours of work per week by veteran status?
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+**Research quesion 1:**
+We start by selecting the required variables from the data. Also, since we are only interested in these two variable, we should focus on complete cases as interpolation will not help us for this initial question.
+```{r}
+rq_1 <- brfss2013[c("genhlth", "sleptim1")]
+rq_1 <- rq_1 %>%
+  filter(complete.cases(rq_1), sleptim1 > 0, sleptim1 <= 24)
+str(rq_1)
+summary(rq_1)
+```
+Indeed, more than 9000 observations were incomplete. We can observe that the majority of surveyed subjects were in very good or at least good health states. The mean of hours of sleep is about 7, with the interquartile range being 2 hours (ranging from 6 to 8 hours). There are also some obvious outliers with extreme values of sleep.
+
+Next, we have a look at this distribution by using a scatter plot.
+```{r}
+ggplot(data = rq_1, aes(x = genhlth, y = sleptim1)) +
+  geom_boxplot() + 
+  labs(x = "General Health Status",
+       y = "Hours of Sleep per Night",
+       title = "Hours of Sleep and General Health Status")
+```
+
+As can easily be seen, for most health levels the distribution of sleeps looks very similar. Some values are clear outliers, as one can hardly imagine people with at least a fair level of health sleep less than 4 hours or more than 12 hours a day. The boxplot reveals that these outliers are a clear minority - they are well above or below the whiskers.
+
+We can also deduct that the median sleep hours are 7 for excellent through fair health levels while only 6 for surveyed subjects with poor health. The first quartile is also lower by one hour.  Next, we compare the means:
+```{r}
+rq_1 %>%
+  group_by(genhlth) %>%
+  summarise(avg_sleep_hours = mean(sleptim1))
+```
+It does indeed look like there is a slightly positive trend among subjects that health level and hours of sleep are positively correlated.
+
+At this point, further examinations could for example check if the difference in means is significant. An interesting randomized trial would be to look at causality. We might face confounders (perhaps stress from work or other factors) or perhaps reverse causality. One could imagine that poorer health results in less sleep.
+
+
+**Research quesion 2:**
+We will continue with looking at the correlation of income and education. We will also distinguish between the genders.
+```{r}
+rq_2 <- brfss2013[c("sex", "income2", "educa")]
+rq_2 <- rq_2 %>%
+  filter(complete.cases(rq_2))
+str(rq_2)
+```
+Fortunately, all columns are relatively easy to handle and have only a limited number of factor levels. We do, however, still need to to some transformations in order to really construct a graph from the data. We will use a very simple technique and translate the income factor levels to approximate incomes. We will add some bias due to not accounting for extremely high levels of income, but it should be sufficient to find trends. We will denote the group "75k\$ or more" as 100k\$.
+```{r}
+convert_to_income <- function(string)
+{
+  income <- 10
+  if(string == "Less than $15,000") { income <- 15 }
+  else if(string == "Less than $20,000") { income <- 20 }
+  else if(string == "Less than $25,000") { income <- 25 }
+  else if(string == "Less than $35,000") { income <- 35 }
+  else if(string == "Less than $50,000") { income <- 50 }
+  else if(string == "Less than $75,000") { income <- 75 }
+  else if(string == "$75,000 or more") { income <- 100 }
+  income
+}
+rq_2$income2 <- sapply(as.character(rq_2$income2), FUN = convert_to_income)
+```
+Next, we will use a transformation to calculate the median income per by years of education. The median is less sensitive to our coarse segmentation of the data than the mean. However, we should still expect a bit of bias. This could be helped by having exact data of income.
+
+```{r}
+rq_2 <- rq_2 %>%
+  group_by(educa, sex) %>%
+  summarise(median_income = median(income2))
+rq_2
+```
+There appears to be a clear trend that higher education comes with higher incomes. This trend can be seen for both males and females, with females having less median income at similar education. We continue by visualizing this data in a bar plot.
+```{r, fig.height=8}
+ggplot(data = rq_2, aes(x = educa, y = median_income, fill = sex)) +
+  geom_bar(stat = "identity", position = "dodge") + 
+  labs(x = "Education Level",
+       y = "Median Approximate Income (in 1000$)",
+       title = "Correlation of Education and Income by Gender") +
+  theme(axis.text.x = element_text(angle = 65, hjust = 1))
+```
+
+As we can observe, generally a higher education is correlated with higher income, regardless of gender. It seems men tend to have higher income, especially at the highest education level. It is apparent that for most education levels below 4 years of college males and females face similar improvements to financial success. However, for highly educated individuals, it seems that males earn large amounts of extra money compared to females.
+
+One could conduct further studies to find possible confounders such as ability as one potential candidate. After accounting for confounders, using regression models to make quantitative statements about the effect of education on income would be an interesting way to continue. Another interesting thing to study would be the reason for differences in men's and women's earnings. Potentially, variables such as hours of work per week or the field of work could influence the numbers. 
+
+**Research quesion 3:**
+Finally, we will have a quick glance on a potential correlation between depression and hours of work. We will distinguish between veterans and non-veterans as they may differ in that.
+```{r}
+rq_3 <- brfss2013[c("misdeprd", "scntlwk1", "veteran3")]
+rq_3 <- rq_3 %>%
+  filter(complete.cases(rq_3))
+rq_3_grouped <- rq_3 %>%
+  group_by(veteran3, misdeprd) %>%
+  summarise(mean_work_hours = mean(scntlwk1))
+rq_3_grouped
+```
+The summary suggests a correlation between veteran status and hours of work, but across the levels of depression there is no clear trend in working hours. An interesting thing to notice are the work hours for severly depressed subjects. We emphasize this by using a boxplot:
+```{r}
+ggplot(data = rq_3, aes(x = misdeprd, y = scntlwk1, fill = veteran3)) + 
+  geom_boxplot() + 
+  labs(x = "Days with Feeling of Depression",
+       y = "Hours of Work per Week",
+       title = "Correlation of Depression and Working Hours by Veteran Status")
+```
+
+It seems like there is no clear trend, but depressed veterans work very long hours while depressed non-veterans tend to have shorter work weeks. This is interesting to see. Further studies could examine whether there exists some causal relationship and, if so, in what direction. 
+For other groups, it seems that there is no correlation between work hours and depression. However, it seems that across all mental states, veterans work longer hours than non-veterans.
+It would be interesting to continue the investigation with the question whether veterans work longer hours than non-veterans. Additionally, the search for other factors of depression could be resumed. Also, to further address the original question, looking at potentially confounding variables such as responsibility at work may clear up the relationships.
+
+We conclude this report with the remark that some interesting correlations were found that are worth examining further, e.g. in form of a randomized trial. By ovserving further variables, especially confounders, using advanced techniques such as the adjunctive clause criterion may allow for causal inference when controlling for confounding variables. As they are typically hard to retrieve afterwards, randomized assignments may be the better choice here. 
+
+

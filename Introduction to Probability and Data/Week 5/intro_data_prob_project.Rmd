@@ -111,6 +111,7 @@ rq_2$income2 <- sapply(as.character(rq_2$income2), FUN = convert_to_income)
 ```
 Next, we will use a transformation to calculate the median income per by years of education. The median is less sensitive to our coarse segmentation of the data than the mean. However, we should still expect a bit of bias. This could be helped by having exact data of income.
 
+We group the data by education and sex and calculate the mean income per group.
 ```{r}
 rq_2 <- rq_2 %>%
   group_by(educa, sex) %>%
@@ -132,7 +133,7 @@ As we can observe, generally a higher education is correlated with higher income
 One could conduct further studies to find possible confounders such as ability as one potential candidate. After accounting for confounders, using regression models to make quantitative statements about the effect of education on income would be an interesting way to continue. Another interesting thing to study would be the reason for differences in men's and women's earnings. Potentially, variables such as hours of work per week or the field of work could influence the numbers. 
 
 **Research quesion 3:**
-Finally, we will have a quick glance on a potential correlation between depression and hours of work. We will distinguish between veterans and non-veterans as they may differ in that.
+Finally, we will have a quick glance on a potential correlation between depression and hours of work. We will distinguish between veterans and non-veterans as they may differ in that. To do so, we group by veteran status and number of days of depression in the past 30 days and calculate the mean hours of work per week.
 ```{r}
 rq_3 <- brfss2013[c("misdeprd", "scntlwk1", "veteran3")]
 rq_3 <- rq_3 %>%

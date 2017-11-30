@@ -156,6 +156,8 @@ It seems like there is no clear trend, but depressed veterans work very long hou
 For other groups, it seems that there is no correlation between work hours and depression. However, it seems that across all mental states, veterans work longer hours than non-veterans.
 It would be interesting to continue the investigation with the question whether veterans work longer hours than non-veterans. Additionally, the search for other factors of depression could be resumed. Also, to further address the original question, looking at potentially confounding variables such as responsibility at work may clear up the relationships.
 
+
+## Further Notes
 We conclude this report with the remark that some interesting correlations were found that are worth examining further, e.g. in form of a randomized trial. By ovserving further variables, especially confounders, using advanced techniques such as the adjunctive clause criterion may allow for causal inference when controlling for confounding variables. As they are typically hard to retrieve afterwards, randomized assignments may be the better choice here. 
 
 

@@ -1,7 +1,11 @@
 ---
 title: "Foundations for inference - Sampling distributions"
-output: statsr:::statswithr_lab
-runtime: shiny
+output:
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+#runtime: shiny
 ---
 
 <div id="instructions">
@@ -229,7 +233,7 @@ print("Each observation represents the mean of a sample of size 10 drawn from th
 </ol>
 ```{r sample-means-small}
 # type your code for Question 3 here, and Run Document
-
+str(sample_means_small)
 ```
 
 4. Which of the following is **true** about the elements in the sampling distributions you created?

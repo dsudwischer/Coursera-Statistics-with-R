@@ -1,7 +1,7 @@
 
 ---
 title: "Inference for categorical data"
-output: statsr:::statswithr_lab
+output: html_document
 ---
 
 <div id="instructions">
@@ -168,6 +168,7 @@ inference(y = response, data = ger12, statistic = "proportion", type = "ci", met
 
 inference(y = response, data = net12, statistic = "proportion", type = "ci", method = "theoretical", success = "atheist")
 ```
+
 <b>The conditions are met again: The indipendence condition holds true for the same reason as for the US and the success-failure-conditions holds true as one can easily see from the table output.</b>
 
 ## How does the proportion affect the margin of error?

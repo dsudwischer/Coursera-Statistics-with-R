@@ -1,11 +1,11 @@
 ---
 title: "Statistical inference with the GSS data"
 output:
-  pdf_document: default
   html_document:
     fig_height: 4
     highlight: pygments
     theme: spacelab
+  pdf_document: default
 ---
 
 ## Setup
@@ -30,10 +30,10 @@ load("gss.Rdata")
 
 ## Part 1: Data
 
-The data set at hand is a cleaned subset of the original General Social Survey cumulative file that contains records from 1972 through 2012. The GSS aims to monitor and explain changes in the American society. In doing so, the GSS collects data  
+The data set at hand is a cleaned subset of the original General Social Survey cumulative file that contains records from 1972 through 2012. The GSS aims to monitor and explain changes in the American society. In doing so, the GSS collects data from US households.  
 The data is observational, so we will not be able to infer causal relationships. While there are ways to infer causality from observational data, such as the disjunctive cause criterion, these were not covered in this course and will consequently not be used.
 
-Since the GSS puts tremendous effort in the generalizability, utilizing random samples of less than 10% of the total population from multiple strata that were formed using national census data, our findings can be generalized to the US population. However, slight bias is induced by the fact that responding to the survey is strictly voluntarily. Since the survey is conducted face-to-face at the University of Chicago, people who are not willing or not able to visit the university for the survey are likely underrepresented.
+Since the GSS puts tremendous effort in the generalizability, utilizing random samples of less than 10% of the total population from multiple strata that were formed using national US census data, our findings can be generalized to the US population. However, slight bias is induced by the fact that responding to the survey is strictly voluntarily. Since the survey is conducted face-to-face at the University of Chicago, people who are not willing or not able to visit the university for the survey are likely underrepresented.
 
 * * *
 

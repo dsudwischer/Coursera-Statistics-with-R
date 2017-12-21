@@ -15,16 +15,13 @@ output:
 library(ggplot2)
 library(dplyr)
 library(statsr)
+library(GGally)
 ```
 
 ### Load data
 
-Make sure your data and R Markdown files are in the same directory. When loaded
-your data file will be called `movies`. Delete this note when before you submit 
-your work. 
-
 ```{r load-data}
-#load("movies.Rdata")
+load("movies.Rdata")
 ```
 
 
@@ -33,20 +30,102 @@ your work.
 
 ## Part 1: Data
 
+The data set contains a 651 randomly sampled movies that were produced and relased prior to 2016, including additional information that has been gathered from movie websites IMBD and Rotten Tomatoes.
+
+Consequently, we are dealing with observational data. Since random sampling was utilized to generate the sample, we can generalize our findings to all movies. However, since this is not an experimental study, we cannot infer causality from the data. While there are advanced methods to discover causal relationships in observational data, they were not covered in the course and will not be used in this analysis.
 
 * * *
 
 ## Part 2: Research question
 
+We will use the data in order to predict the IMDB rating using a subset of the other predictors in the data set. More specifically, we will focus on the question:
 
+<b>Which properties of movies are associated with high IMDB ratings and how large is their association with the expected IMDB rating?</b>
+
+The properties we are considering are only those included in the orginal data set and additional properties than can be derived using those variables. To ensure staying within the scope of the project, no external data will be gathered.
 
 * * *
 
 ## Part 3: Exploratory data analysis
 
-NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
-button above. Make sure that your code is visible in the project you submit. 
-Delete this note when before you submit your work.
+Our analysis begins with a few plots to obtain a feeling for the data at hand. First, let us investigate the distribution of rankings on IMDB and Rotten Tomatoes, which will be abbreviated as RT for the remainder of the analysis.
+
+```{r summary_statistics}
+summary(select(movies, imdb_rating, critics_score, audience_score))
+```
+
+Our first observation is that the data is on different scales. A short test on the websites revealed that the scores on IMDB range from 1 (minimum) to 10 (maximum). The RT scores on the other hand are according to my research on a 0-100 scale. This means we will have to scale them to be comparable. We will use a simple linear scaling that transforms IMDB ratings to a 0 to 100 scale instead of a 1 to 10 scale.
+
+```{r scale_imdb}
+movies$imdb_rating <- 100/9 * movies$imdb_rating - 100/9
+```
+
+Let us plot density estimates of the three ratings into a single plot.
+
+```{r rating_density}
+ggplot(data = movies) +
+  geom_density(mapping = aes(x = imdb_rating), color = "red") +
+  geom_density(mapping = aes(x = critics_score), color = "blue") +
+  geom_density(mapping = aes(x = audience_score), color = "green") +
+  xlab("Rating") +
+  ylab("Density") +
+  labs(title = "Density Estimates of Ratings", caption = "Red: IMDB, Blue: RT Critics, Green: RT Audience")
+```
+
+As we can see, the RT ratings have far more spread, especially the audience ones. Next, we will look at pairwise correlations. To do so, we will utilize the ggpairs function. However, we need to dispose of variables that we will not include.
+
+There a few variables that we should omit in the first step for several reasons.
+
+<ul><li>Title, Actor columns, Director, Studio: While there are probably a few titles, actors, directors and studios that are guaranteed to receive good ratings, we will not consider them due to potential overfitting.</li>
+<li>Date columns: We will convert the date columns into single date-format columns.</li>
+<li>Best Picture Oscar: We will merge these variables into one variable with three levels: "No", "Nominated" and "Received" due to collinearity of the two columns.</li><ul>
+
+Other variables might be removed later on.
+
+We will start doing the data manipulations mentioned above.
+
+```{r mutate_data_1}
+movies <- movies %>%
+  mutate(date_theater_release = as.POSIXct(paste(movies$thtr_rel_year, movies$thtr_rel_month, movies$thtr_rel_day), format = "%Y %m %d"), date_DVD_release = as.POSIXct(paste(movies$dvd_rel_year, movies$dvd_rel_month, movies$dvd_rel_day), format = "%Y %m %d"), best_picture_oscar = as.factor(ifelse(best_pic_win == TRUE, yes = "Win", no = ifelse(best_pic_nom == TRUE, yes = "Nominated", no = "No")))) %>%
+  select(-c(thtr_rel_month, thtr_rel_day, dvd_rel_year, dvd_rel_month, dvd_rel_day, actor1, actor2, actor3, actor4, actor5, director, best_pic_nom, best_pic_win, title, studio, imdb_url, rt_url))
+```
+
+To avoid issues with collinearity, we should drop some highly correlated covariates. We can use the ggcorr function to calculate correlation between our numerical predictors. Please note that the following code produces a warning because not all columns contain numerical data when warnings are not suppressed.
+
+```{r ggcorr, warning=FALSE}
+ggcorr(movies)
+```
+
+We can see that the three score variables are strongly correlated, so the audience score will probably be a valuable predictor for the IMDB rating. However, since critics score and audience score are also strongly correlated, we should remove the critics score from the model.
+
+Next, we should think about the critics rating and the audience rating. Let us plot their relationships:
+
+```{r relationship_score_rating}
+movies %>%
+  select(critics_rating, critics_score) %>%
+  group_by(critics_rating) %>%
+  summarise(min_score = min(critics_score), max_score = max(critics_score))
+movies %>%
+  select(audience_rating, audience_score) %>%
+  group_by(audience_rating) %>%
+  summarise(min_score = min(audience_score), max_score = max(audience_score))
+```
+
+Our observation is confirmed by some research on the official RT website: The cutoff for the ratings is 60, and Certified Fresh is a special rating that does not only require a score of at least 60 but also several other factors such as a number of reviews by regocnized reviewers. Since little additional information is provided by these variables, we will exclude them from our further analysis.
+
+Next, our two date columns are moderately correlated:
+
+```{r date_corr}
+with(data = movies, expr = cor(as.integer(date_DVD_release), as.integer(date_theater_release), use = "complete.obs"))
+```
+
+So we should remove one of them as well. We will keep the theater_release_date as probably most important reviews are based on the movie theater version.
+
+```{r drop_columns}
+movies <- movies %>%
+  select(-c(critics_rating, audience_rating, critics_score, date_DVD_release))
+```
+
 
 * * *
 

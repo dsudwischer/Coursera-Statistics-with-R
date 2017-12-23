@@ -1,7 +1,8 @@
 ---
 title: "Modeling and prediction for movies"
-output: 
-  html_document: 
+output:
+  pdf_document: default
+  html_document:
     fig_height: 4
     highlight: pygments
     theme: spacelab
@@ -30,7 +31,7 @@ load("movies.Rdata")
 
 ## Part 1: Data
 
-The data set contains a 651 randomly sampled movies that were produced and relased prior to 2016, including additional information that has been gathered from movie websites IMBD and Rotten Tomatoes.
+The data set contains 651 randomly sampled movies that were produced and released prior to 2016, including additional information that has been gathered from movie websites IMBD and Rotten Tomatoes.
 
 Consequently, we are dealing with observational data. Since random sampling was utilized to generate the sample, we can generalize our findings to all movies. However, since this is not an experimental study, we cannot infer causality from the data. While there are advanced methods to discover causal relationships in observational data, they were not covered in the course and will not be used in this analysis.
 
@@ -42,7 +43,9 @@ We will use the data in order to predict the IMDB rating using a subset of the o
 
 <b>Which properties of movies are associated with high IMDB ratings and how large is their association with the expected IMDB rating?</b>
 
-The properties we are considering are only those included in the orginal data set and additional properties than can be derived using those variables. To ensure staying within the scope of the project, no external data will be gathered.
+This question is interesting for tweo reasons: first, it gives insight about which characteristics are valued at IMDB. Second, it also gives us insight about the correlation between the IMDB score and the received score on Rotten Tomatoes. This can explain whether the scores received on both websites are similar or not.
+
+The properties we are considering are only those included in the original data set and additional properties than can be derived using those variables. To ensure staying within the scope of the project, no external data will be gathered.
 
 * * *
 
@@ -69,7 +72,8 @@ ggplot(data = movies) +
   geom_density(mapping = aes(x = audience_score), color = "green") +
   xlab("Rating") +
   ylab("Density") +
-  labs(title = "Density Estimates of Ratings", caption = "Red: IMDB, Blue: RT Critics, Green: RT Audience")
+  labs(title = "Density Estimates of Ratings",
+       caption = "Red: IMDB, Blue: RT Critics, Green: RT Audience")
 ```
 
 As we can see, the RT ratings have far more spread, especially the audience ones. Next, we will look at pairwise correlations. To do so, we will utilize the ggpairs function. However, we need to dispose of variables that we will not include.
@@ -86,7 +90,7 @@ We will start doing the data manipulations mentioned above.
 
 ```{r mutate_data_1}
 movies <- movies %>%
-  mutate(date_theater_release = as.POSIXct(paste(movies$thtr_rel_year, movies$thtr_rel_month, movies$thtr_rel_day), format = "%Y %m %d"), date_DVD_release = as.POSIXct(paste(movies$dvd_rel_year, movies$dvd_rel_month, movies$dvd_rel_day), format = "%Y %m %d"), best_picture_oscar = as.factor(ifelse(best_pic_win == TRUE, yes = "Win", no = ifelse(best_pic_nom == TRUE, yes = "Nominated", no = "No")))) %>%
+  mutate(date_theater_release = as.POSIXct(paste(movies$thtr_rel_year, movies$thtr_rel_month, movies$thtr_rel_day), format = "%Y %m %d"), date_DVD_release = as.POSIXct(paste(movies$dvd_rel_year, movies$dvd_rel_month, movies$dvd_rel_day), format = "%Y %m %d"), best_picture_oscar = as.factor(ifelse(best_pic_win == "yes", yes = "Win", no = ifelse(best_pic_nom == "yes", yes = "Nominated", no = "No")))) %>%
   select(-c(thtr_rel_month, thtr_rel_day, dvd_rel_year, dvd_rel_month, dvd_rel_day, actor1, actor2, actor3, actor4, actor5, director, best_pic_nom, best_pic_win, title, studio, imdb_url, rt_url))
 ```
 
@@ -98,7 +102,20 @@ ggcorr(movies)
 
 We can see that the three score variables are strongly correlated, so the audience score will probably be a valuable predictor for the IMDB rating. However, since critics score and audience score are also strongly correlated, we should remove the critics score from the model.
 
-Next, we should think about the critics rating and the audience rating. Let us plot their relationships:
+Our most important predictor will probably be the rating on Rotten Tomatoes, so we should make a plot:
+
+```{r scatter_rotten:imdb}
+ggplot(movies, aes(x = audience_score, y = imdb_rating)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  xlab("RT Audience Score") +
+  ylab("IMDB Rating") +
+  labs(title = "RT Audience Score vs. IMDB Rating")
+```
+
+The correlation is easily visible in the visualization.
+
+Next, we should think about the critics rating and the audience rating and their respective scores. Let us summarise their relationships:
 
 ```{r relationship_score_rating}
 movies %>%
@@ -111,7 +128,7 @@ movies %>%
   summarise(min_score = min(audience_score), max_score = max(audience_score))
 ```
 
-Our observation is confirmed by some research on the official RT website: The cutoff for the ratings is 60, and Certified Fresh is a special rating that does not only require a score of at least 60 but also several other factors such as a number of reviews by regocnized reviewers. Since little additional information is provided by these variables, we will exclude them from our further analysis.
+Our observation is confirmed by some research on the official RT website: The cutoff for the ratings is 60, and Certified Fresh is a special rating that does not only require a score of at least 60 but also several other factors such as a number of reviews by recognized reviewers. Since little additional information is provided by these variables, we will exclude them from our further analysis. We will later examine whether there is special need to include these variables.
 
 Next, our two date columns are moderately correlated:
 
@@ -119,31 +136,189 @@ Next, our two date columns are moderately correlated:
 with(data = movies, expr = cor(as.integer(date_DVD_release), as.integer(date_theater_release), use = "complete.obs"))
 ```
 
-So we should remove one of them as well. We will keep the theater_release_date as probably most important reviews are based on the movie theater version.
+So we should remove one of them as well. We will keep the theater_release_date as probably most important reviews are based on the movie theater version. We can also remove the theater release year from the data set since this information is already included in the date of theater release. We will also convert this date to an integer, measuring the number of days since 1970-01-01.
 
 ```{r drop_columns}
 movies <- movies %>%
-  select(-c(critics_rating, audience_rating, critics_score, date_DVD_release))
+  select(-c(critics_rating, audience_rating, date_DVD_release, thtr_rel_year)) %>%
+  mutate(t = as.integer(date_theater_release)) %>%
+  select(-date_theater_release)
 ```
 
+Let us check whether there is an association between rating and the top200_box variable.
+
+```{r top200_box}
+movies %>%
+  select(imdb_rating, audience_score, top200_box) %>%
+  group_by(top200_box) %>%
+  summarise(avg_imdb_rating = mean(imdb_rating), avg_audience_score = mean(audience_score))
+```
+
+It seems that top200 box movies have higher IMDB ratings on average, so this might carry information. However, since this effect is also contained in the audience score, we can remove the top200 box variable due to its association with the audience score.
+
+```{r drop_more_variables}
+movies <- movies %>%
+  select(-top200_box)
+```
+
+The remaining predictors are more difficult to rate. The number of variables is low enough to start with the model selection, so we will start with the modeling step.
 
 * * *
 
 ## Part 4: Modeling
 
-NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
-button above. Make sure that your code is visible in the project you submit. 
-Delete this note when before you submit your work.
+We will now start building the model. We will stay within the scope of the course and use linear regression without any additional preprocessing such as scaling the data or using dimensionality reduction methods and without regularization methods. For model selection, we will use backwards feature selection with the p-value as selection criterion. We have to be careful with overfitting, so using a separate test data set would be beneficial. We could probably receive slightly better results when using the adjusted $R^2$ as a criterion. However, since the assignment requires manual feature selection, we will use the method that requires us to build fewer models. In a more serious pattern, we should follow a more precise technique such as using a designated test set, the $R^2$ criterion or even a best subset selection which is still feasible with only 12 predictors and suitable preprocessing steps.
 
+We start with the full model, including all predictors. We remove the predictor with the highest p-value and use the remaining predictors to build a new model. Repeating this step until all predictors with p-values greater than the threshold are removed yields the final model. Note that we will use 95% significance for our predictors.
+
+```{r lm8}
+fit <- lm(data = movies, formula = imdb_rating ~ title_type + genre + runtime + mpaa_rating +
+            imdb_num_votes + audience_score + best_actor_win + best_actress_win +
+            best_dir_win + t + best_picture_oscar)
+```
+
+For our first model, we can see that the time factor is highly non-significant, so we drop it from our model and fit the same model again.
+
+```{r lm2}
+fit <- lm(data = movies, formula = imdb_rating ~ title_type + genre + runtime + mpaa_rating +
+            imdb_num_votes + audience_score + best_actor_win + best_actress_win +
+            best_dir_win + best_picture_oscar)
+```
+
+Next, we remove the best picture Oscar from the model.
+
+```{r lm3}
+fit <- lm(data = movies, formula = imdb_rating ~ title_type + genre + runtime + mpaa_rating +
+            imdb_num_votes + audience_score + best_actor_win + best_actress_win +
+            best_dir_win)
+```
+
+The least significant predictor now is best actor win, so we remove it as well.
+
+```{r lm4}
+fit <- lm(data = movies, formula = imdb_rating ~ title_type + genre + runtime + mpaa_rating +
+            imdb_num_votes + audience_score + best_actress_win + best_dir_win)
+```
+
+The best actress Oscar is now the least significant, so we remove it.
+
+```{r lm5}
+fit <- lm(data = movies, formula = imdb_rating ~ title_type + genre + runtime + mpaa_rating +
+            imdb_num_votes + audience_score + best_dir_win)
+```
+
+The best director is the least significant predictor now, so we can remove it as well.
+
+```{r lm6}
+fit <- lm(data = movies, formula = imdb_rating ~ title_type + genre + runtime + mpaa_rating +
+            imdb_num_votes + audience_score)
+```
+
+The next feature to remove is the title type.
+
+```{r lm7}
+fit <- lm(data = movies, formula = imdb_rating ~ genre + runtime + mpaa_rating +
+            imdb_num_votes + audience_score)
+```
+
+All other predictors are significant. Please note that for a factor variable with more than two levels the absence of any significant associated dummy variables is required for it to be removed in feature selection based on p-value.
+
+We will now have a look at the complete summary for this model:
+
+```{r summary_output}
+summary(fit)
+```
+
+As we can see, we have an adjusted $R^2$ of 0.787 which is not a bad result. However, we cannot conclude the validity of the model without performing model diagnostics. 
+
+```{r diagnostics}
+ggplot(data = fit, aes(x = .resid)) +
+  geom_histogram() +
+  xlab("Residuals") + 
+  ylab("Frequency") +
+  labs(title = "Distribution of errors")
+ggplot(data = fit, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  xlab("Fitted Values") + 
+  ylab("Residuals") +
+  labs(title = "Fitted values vs. Residuals")
+```
+
+As we can see, the distribution of the residuals is left-skewed and the residuals have a characteristic fan shape, so we have to deal with heteroscedasticity. We will make an attempt to find the reasons for this issue. It might in fact be the case that the residuals appear to have varying standard deviations because there is an unseen nonlinear relationship. To see this, we plot the main predictor and the response in a scatter plot once again, this time using a smoothing curve:
+
+```{r scatter}
+ggplot(movies, aes(x = audience_score, y = imdb_rating)) +
+  geom_point() +
+  geom_smooth(method = "auto") +
+  xlab("RT Audience Score") +
+  ylab("IMDB Rating") +
+  labs(title = "RT Audience Score vs. IMDB Rating")
+```
+
+Indeed, we can observe that the relationship looks less linear below the 35 mark and above the 85 score mark. We can think about fitting a model including a transformed feature. The plot above should remind of a third degree polynomial. Consequently, we should try and add squared and cubic variations of the audience score.
+
+```{r add_poly_feature}
+fit <- lm(data = movies, formula = imdb_rating ~ genre + runtime + mpaa_rating +
+            imdb_num_votes + audience_score + I(audience_score^2) + I(audience_score^3))
+summary(fit)
+```
+
+We can see that the new polynomial features are highly significant, so we will not start over with feature elimination.
+Let us look at the residuals in a bit more detail:
+
+```{r residuals}
+head(movies[order(-I(abs(fit$residuals))), c("imdb_rating", "audience_score",
+                                             "critics_score", "genre", "title_type")], 10)
+```
+
+As we can see, the movies that have been predicted the worst are movies for which different scores vary extremely. It is a difficult task to rank these movies correctly with the data at hand. An interesting thing to notice is that the mispredictions are mostly associated with movies that received low scores.
+
+Let us do some final diagnostics for this model.
+
+```{r resid_plots}
+ggplot(data = fit, aes(x = .resid)) +
+  geom_histogram() +
+  xlab("Residuals") + 
+  ylab("Frequency") +
+  labs(title = "Distribution of errors")
+ggplot(data = fit, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  xlab("Fitted Values") + 
+  ylab("Residuals") +
+  labs(title = "Fitted values vs. Residuals")
+```
+
+We can interpret the coefficients of the linear model to find insight about associations between the predictors and the response. Let us begin with the interpretation of the coefficients for the genre. The baseline value is the genre "Action and Adventure". For example, horror movies are expected to be rated by 1.803 (unscaled) score points better than the baseline genre. Scaling back to the original scale, that translates to a better score of 1.16227, on average. The interpretation of the other coefficient for the factor variable mpaa rating is similar. The baseline level is "G". The coefficients for numerical variables such as runtime are interpreted as follows: For each additional minute runtime, the (unscaled) rating is expected to be 0.052 higher, on average. For the number of IMDB votes, the interpretation is similar. For the audience score, it is a bit more difficult. Since we use polynomial features, the increase is linear in each of the three powers of the audience score. For example, an increase of the third power of the audience score by 1 is associated with an increase of the (unscaled) IMDB rating by 0.0001633, on average. The total effect on an increase in the audience score is, however, dependent on the current level of that variable.
+
+To finalize this section, we have to note that the normality assumption seems to be violated by the left-skew of the residuals. Also, we still have a problem with heteroscedasticity. This means that our prediction intervals will be incorrect. For low fitted values, they will be too narrow and for large fitted values they will be too wide. One could try and calculate approximate standard deviations for the errors based on the size of the fitted values in order to obtain a better understanding.
 * * *
 
 ## Part 5: Prediction
 
-NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
-button above. Make sure that your code is visible in the project you submit. 
-Delete this note when before you submit your work.
+In this part, we are going to predict the IMDB rating for a movie released in 2016 that is not included in the data set. For this, we will consider the movie "Arrival". Using the data gathered from the IMDB and RT websites (http://www.imdb.com/title/tt2543164/, https://www.rottentomatoes.com/m/arrival_2016), we can make the prediction (and transform the result back to the original scale):
+
+
+```{r arrival}
+arrival <- data.frame(genre = "Mystery & Suspense", runtime = 116, mpaa_rating = "PG-13", imdb_num_votes = 414904, audience_score = 80)
+unscaled_rating <- predict(fit, newdata = arrival, interval = "prediction")
+scaled_rating <- 9/100 * unscaled_rating + 1
+scaled_rating
+```
+
+As we can see, the true IMDB rating (which is 8.0 as of 2017/12/23) lies well within the prediction interval of 6.6 to 8.6. Even the point estimate 7.59 is quite good, So the prediction here is pretty accurate. Note that the prediction interval is a little inflated by the heteroscedasticity.
+
+The prediction interval takes into account both the uncertainty in the parameter estimation and the uncertainty of the random error term. If the model met all four assumptions of the ordinary least squares estimator (i.e. linearity in the predictors, uncorrelated error terms, normality of the errors, homoscedasticity), we would be 95% confident that the true value is inside this interval. Note that this is a slightly different interpretation than confidence intervals in inference, where we would expect 95% of confidence intervals to capture the true mean. Here we are also estimating the variance of the random error that follows a normal distribution under the OLS assumptions.
 
 * * *
 
 ## Part 6: Conclusion
 
+The analysis showed that we would expect documentaries with long runtime and an mpaa rating of "G" that receive high audiences scores on Rotten Tomatoes and many votes on IMDB to have extraordinarily high IMDB ratings. This answers the original research question. Also, the model is easily interpretable.
+
+However, there are a few shortcomings of the model. First and foremost, the OLS assumptions are not met completely resulting in erroneous standard errors for the predictors. This also leads to slightly incorrect prediction intervals. Nonetheless, the model yielded useful insight into the characteristics that are associated with movies that receive high ratings on IMDB.
+
+To improve the model, several steps could be done. The apparent heteroscedasticity could in fact could have a different root cause, for example a non-linearity in the predictors or bias introduced by omitted variables. Using backwards feature selection with adjusted $R^2$ as feature elimination criterion might yield slightly better results.
+
+In terms of raw predictive power, using preprocessing steps such as the singular value decomposition to ensure perpendicular predictors. Also, utilizing more powerful models such as Random Forests could yield more accurate predictions.
+
+Another thing we found was that the largest residuals came from movies where the scores on RT and IMDB where extremely diverging. One could try and capture this effect in another predictor.
